@@ -1,0 +1,93 @@
+{
+  "name": "03 - Daily Ops & Homelab Brief",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 * * *"
+            }
+          ]
+        }
+      },
+      "id": "daily-trigger",
+      "name": "Daily 07:00 Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.AGENT_SERVICE_URL || 'http://host.docker.internal:8081' }}/v1/run",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ task: 'Check homelab service health and summarize any degraded containers in 3 concise bullet points.', channel: 'scheduled-brief', max_steps: 3, max_cost_usd: 0.02 }) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "generate-brief",
+      "name": "Generate Health Brief",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.NOTIFY_WEBHOOK_URL || 'https://ntfy.example.com/homelab-brief' }}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "text/plain",
+        "body": "={{ 'Morning Ops Brief\\n\\n' + ($json.answer || 'No summary generated.') + '\\n\\nCost: $' + ($json.cost_usd || 0) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "send-notification",
+      "name": "Push Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [740, 300]
+    }
+  ],
+  "connections": {
+    "Daily 07:00 Schedule": {
+      "main": [
+        [
+          {
+            "node": "Generate Health Brief",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Health Brief": {
+      "main": [
+        [
+          {
+            "node": "Push Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "template"
+    },
+    {
+      "name": "ops"
+    }
+  ]
+}

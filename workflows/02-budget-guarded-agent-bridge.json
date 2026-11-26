@@ -1,0 +1,170 @@
+{
+  "name": "02 - Budget-Guarded Agent Bridge",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "agent-bridge",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "bridge-webhook",
+      "name": "Agent Bridge Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.AGENT_SERVICE_URL || 'http://host.docker.internal:8081' }}/healthz",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "preflight-health",
+      "name": "Preflight Health & Budget Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "budget-ok",
+              "leftValue": "={{ $json.budget_remaining_usd }}",
+              "rightValue": 0.01,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "budget-gate",
+      "name": "Budget Available?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.AGENT_SERVICE_URL || 'http://host.docker.internal:8081' }}/v1/run",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ task: $('Agent Bridge Webhook').item.json.body.task || '', channel: 'n8n-bridge', max_steps: 4, max_cost_usd: 0.03 }) }}",
+        "options": {
+          "timeout": 25000
+        }
+      },
+      "id": "execute-agent",
+      "name": "Execute Guarded Agent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [920, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "respond-agent",
+      "name": "Return Agent Result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1160, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'budget_exhausted', message: 'Daily AI budget cap reached. Falling back to deterministic rules.' }) }}",
+        "options": {
+          "responseCode": 429
+        }
+      },
+      "id": "respond-budget-cap",
+      "name": "Return Budget Cap Fallback",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [920, 420]
+    }
+  ],
+  "connections": {
+    "Agent Bridge Webhook": {
+      "main": [
+        [
+          {
+            "node": "Preflight Health & Budget Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preflight Health & Budget Check": {
+      "main": [
+        [
+          {
+            "node": "Budget Available?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Budget Available?": {
+      "main": [
+        [
+          {
+            "node": "Execute Guarded Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return Budget Cap Fallback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Guarded Agent": {
+      "main": [
+        [
+          {
+            "node": "Return Agent Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "template"
+    },
+    {
+      "name": "budget-guard"
+    }
+  ]
+}
