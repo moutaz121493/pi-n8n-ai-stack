@@ -41,6 +41,9 @@ def validate_file(path: pathlib.Path) -> list[str]:
             for req in ("id", "name", "type", "position"):
                 if req not in n:
                     errors.append(f"Node missing {req!r}: {n}")
+            # without webhookId n8n registers the webhook under a generated path, not /webhook/<path>
+            if n.get("type") == "n8n-nodes-base.webhook" and not n.get("webhookId"):
+                errors.append(f"Webhook node {n.get('name')!r} missing 'webhookId'")
         for src in data.get("connections", {}):
             if src not in names:
                 errors.append(f"Connection source {src!r} does not match any node name")

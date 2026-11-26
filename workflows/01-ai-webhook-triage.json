@@ -11,6 +11,7 @@
       "id": "webhook-intake",
       "name": "Webhook Intake",
       "type": "n8n-nodes-base.webhook",
+      "webhookId": "3f6c1b2e-7a41-4c1e-9b8a-a1f0c2d4e601",
       "typeVersion": 2,
       "position": [220, 300]
     },
